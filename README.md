@@ -154,8 +154,4 @@ The workflow can be exported as:
 
 ---
 
-## Author
 
-**Name:** [Your Name]  
-**Project:** ML Automation & ETL Pipeline  
-**Context:** BI & Data Engineering
