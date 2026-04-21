@@ -1,0 +1,925 @@
+{
+  "name": "E-cCommerce",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2448,
+        -144
+      ],
+      "id": "52950267-f601-4dbb-805f-db7b66775cc8",
+      "name": "Trigger at 6am"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT TOP 10\n    dc.Client_PK,\n    dc.Type_client,\n    dc.Ville AS ville_client,\n    DATEDIFF(DAY,\n        MAX(CASE WHEN dd.Date != '1111-11-11' THEN dd.Date ELSE NULL END),\n        '2026-01-02') AS recence_jours,\n    COUNT(DISTINCT CASE\n        WHEN fv.Numero_Facture != 'Aucun' THEN fv.Numero_Facture\n        WHEN fv.Numero_Commande != 'Aucun' THEN fv.Numero_Commande\n        ELSE NULL END) AS nb_commandes,\n    COUNT(DISTINCT CASE WHEN fv.Numero_Facture != 'Aucun' THEN fv.Numero_Facture ELSE NULL END) AS nb_factures_b2b,\n    COUNT(DISTINCT CASE WHEN fv.Numero_Commande != 'Aucun' THEN fv.Numero_Commande ELSE NULL END) AS nb_commandes_b2c,\n    AVG(fv.Montant_de_la_commande) AS panier_moyen,\n    MAX(fv.Montant_de_la_commande) AS max_commande,\n    MIN(fv.Montant_de_la_commande) AS min_commande,\n    MAX(fv.Montant_de_la_commande) - MIN(fv.Montant_de_la_commande) AS variabilite_commandes,\n    SUM(fv.Montant_de_la_commande) AS montant_total,\n    AVG(fv.Montant_Remise) AS remise_moyenne,\n    AVG(fv.Montant_Livraison) AS livraison_moyenne,\n    SUM(fv.Quantite) AS total_quantite,\n    COUNT(DISTINCT fv.Produit_FK) AS nb_produits_distincts,\n    COUNT(DISTINCT fv.Categorie_FK) AS nb_categories,\n    SUM(CASE WHEN dd.Mois IN (6,7,8,12) AND dd.Date != '1111-11-11'\n        THEN fv.Montant_de_la_commande ELSE 0 END) AS ca_saison_haute,\n    MAX(dmp.Type_paiement) AS paiement_dominant,\n    MAX(dtv.Type_Vente) AS type_vente_dominant\nFROM Fact_Ventes fv\nJOIN Dim_Client dc ON fv.Client_FK = dc.Client_PK\nJOIN DimDates dd ON fv.Date_FK = dd.Date_PK\nJOIN Dim_Geographie dg ON fv.Geographie_FK = dg.Geographie_PK\nJOIN Dim_Type_Vente dtv ON fv.Type_Vente_FK = dtv.Type_Vente_PK\nJOIN Dim_Mode_Paiement dmp ON fv.Mode_Paiement_FK = dmp.Mode_Paiement_PK\nWHERE dd.Date != '1111-11-11'\nGROUP BY dc.Client_PK, dc.Type_client, dc.Ville;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -1008,
+        -400
+      ],
+      "id": "c1726e87-e8dd-422e-a69f-bf604c798ad8",
+      "name": "Classification query",
+      "credentials": {
+        "microsoftSql": {
+          "id": "zBaawysJj0IoQWbc",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT TOP 10\n    fv.Numero_Commande,\n    MAX(fv.Montant_de_la_commande)                          AS Montant_de_la_commande,\n    SUM(fv.Quantite)                                        AS Quantite_totale,\n    AVG(fv.Prix_Unité)                                      AS Prix_Unité_moyen,\n    SUM(fv.Montant_Remise)                                  AS Montant_Remise,\n    SUM(fv.Montant_Livraison)                               AS Montant_Livraison,\n    MAX(CASE WHEN fv.Code_Promo IS NOT NULL\n        AND fv.Code_Promo != '' AND fv.Code_Promo != 'Aucun'\n        THEN 1 ELSE 0 END)                                  AS a_code_promo,\n    MAX(dc.Type_client)                                     AS Type_client,\n    MAX(dc.Ville)                                           AS ville_client,\n    MAX(dp.Prix)                                            AS prix_catalogue,\n    CASE WHEN MAX(CAST(dp.En_Promo AS INT)) = 1 THEN 1 ELSE 0 END AS En_Promo,\n    MAX(dp.Canal)                                           AS canal_produit,\n    MAX(dcat.Categorie)                                     AS categorie,\n    MAX(dtv.Type_Vente)                                     AS type_vente,\n    MAX(dmp.Type_paiement)                                  AS type_paiement,\n    MAX(dd.Annee)                                           AS Annee,\n    MAX(dd.Mois)                                            AS Mois,\n    MAX(dd.Trimestre) AS Trimestre,\n    MAX(dd.Semestre)  AS Semestre,\n    MAX(CASE WHEN dd.Mois IN (6,7,8,12) THEN 1 ELSE 0 END) AS est_saison_haute\nFROM Fact_Ventes fv\nJOIN Dim_Client dc        ON fv.Client_FK       = dc.Client_PK\nJOIN Dim_Produit dp       ON fv.Produit_FK      = dp.Produit_PK\nJOIN Dim_Categorie dcat   ON fv.Categorie_FK    = dcat.Categorie_PK\nJOIN Dim_Type_Vente dtv   ON fv.Type_Vente_FK   = dtv.Type_Vente_PK\nJOIN Dim_Mode_Paiement dmp ON fv.Mode_Paiement_FK = dmp.Mode_Paiement_PK\nJOIN DimDates dd          ON fv.Date_FK         = dd.Date_PK\nWHERE fv.Montant_de_la_commande > 0\n  AND dd.Date != '1111-11-11'\n  AND fv.Numero_Facture = 'Aucun'\nGROUP BY fv.Numero_Commande;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -1008,
+        -208
+      ],
+      "id": "7e88c322-7b80-4f04-b82b-8e32e7c6dd35",
+      "name": "Regression Query",
+      "credentials": {
+        "microsoftSql": {
+          "id": "zBaawysJj0IoQWbc",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    CONVERT(VARCHAR(7), dd.Date, 120) + '-01' AS Date,\n    SUM(fv.Montant_de_la_commande) AS CA_Mensuel,\n    SUM(fv.Quantite) AS Quantite_Mensuelle,\n    COUNT(DISTINCT fv.Numero_Commande) AS Nb_Commandes,\n    SUM(fv.Montant_Remise) AS Remise_Totale,\n    AVG(fv.Prix_Unité) AS Prix_Moyen_Unite\nFROM Fact_Ventes fv\nJOIN DimDates dd ON fv.Date_FK = dd.Date_PK\nWHERE dd.Date != '1111-11-11'\nAND fv.Numero_Facture = 'Aucun'\nAND fv.Montant_de_la_commande > 0\nGROUP BY CONVERT(VARCHAR(7), dd.Date, 120)\nORDER BY Date",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -1008,
+        -32
+      ],
+      "id": "c547ad38-3127-4da7-b860-56e61b101d2d",
+      "name": "Time Serie Query",
+      "credentials": {
+        "microsoftSql": {
+          "id": "zBaawysJj0IoQWbc",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ref AS (\n    SELECT CAST(MAX(d.Date) AS DATE) AS today\n    FROM dbo.Fact_Ventes v\n    JOIN dbo.DimDates d ON v.Date_FK = d.Date_PK\n),\nrfm AS (\n    SELECT\n        v.Client_FK,\n        DATEDIFF(DAY, MAX(d.Date), r.today)           AS Recency,\n        COUNT(DISTINCT v.Numero_Commande)             AS Frequency,\n        SUM(v.Montant_de_la_commande)                 AS Monetary,\n        AVG(v.Montant_de_la_commande)                 AS Avg_Basket,\n        SUM(v.Quantite)                               AS Total_Quantite,\n        COUNT(DISTINCT v.Produit_FK)                  AS Nb_Produits,\n        SUM(v.Montant_remise)                         AS Total_Remise,\n        SUM(v.Montant_Remboursement)                  AS Total_Remboursement,\n        COUNT(v.Vente_PK)                             AS Nb_Ventes,\n        (\n            SELECT TOP 1 v2.Type_Vente_FK\n            FROM dbo.Fact_Ventes v2\n            WHERE v2.Client_FK = v.Client_FK\n            GROUP BY v2.Type_Vente_FK\n            ORDER BY COUNT(*) DESC\n        ) AS Mode_Vente_Principal,\n        CASE WHEN c.Type_client = 'Entreprise' THEN 1 ELSE 0 END AS Is_Entreprise\n    FROM dbo.Fact_Ventes v\n    JOIN dbo.DimDates d ON v.Date_FK = d.Date_PK\n    JOIN dbo.Dim_Client c ON v.Client_FK = c.Client_PK\n    CROSS JOIN ref r\n    GROUP BY v.Client_FK, c.Type_client, r.today\n)\nSELECT TOP 10\n    Client_FK,\n    Recency,\n    Frequency,\n    Monetary,\n    Avg_Basket,\n    Total_Quantite,\n    Nb_Produits,\n    Total_Remise,\n    Total_Remboursement,\n    Nb_Ventes,\n    Mode_Vente_Principal,\n    Is_Entreprise,\n    CASE\n        WHEN Monetary = 0 THEN 0\n        ELSE Total_Remise * 1.0 / Monetary\n    END AS Taux_Remise\nFROM rfm\nORDER BY Client_FK;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -1008,
+        128
+      ],
+      "id": "7ee465c8-8f3a-4748-a372-cc0a67d246a7",
+      "name": "Clustering Query",
+      "credentials": {
+        "microsoftSql": {
+          "id": "zBaawysJj0IoQWbc",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/predict/classification",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {{ JSON.stringify($input.all().map(item => item.json)) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -768,
+        -400
+      ],
+      "id": "b6c5e02a-3d71-4f3d-9bc4-2a8e9b4d61c8",
+      "name": "Classificatin API",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/predict/regression",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {{ JSON.stringify($input.all().map(item => item.json)) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -768,
+        -208
+      ],
+      "id": "62e021f8-e16d-4317-86d8-05a3f86f07af",
+      "name": "Regresion API",
+      "retryOnFail": false,
+      "waitBetweenTries": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/predict/timeseries",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {{ JSON.stringify($input.all().map(item => item.json)) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -768,
+        32
+      ],
+      "id": "62934d34-3b75-40c2-ae63-46b11e76bcc1",
+      "name": "Time Series API",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/predict/clustering",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": [\n    {\n      \"Client_FK\": {{ $json.Client_FK }},\n      \"Recency\": {{ $json.Recency }},\n      \"Frequency\": {{ $json.Frequency }},\n      \"Monetary\": {{ $json.Monetary }},\n      \"Avg_Basket\": {{ $json.Avg_Basket }},\n      \"Total_Quantite\": {{ $json.Total_Quantite }},\n      \"Nb_Produits\": {{ $json.Nb_Produits }},\n      \"Total_Remise\": {{ $json.Total_Remise }},\n      \"Total_Remboursement\": {{ $json.Total_Remboursement }},\n      \"Nb_Ventes\": {{ $json.Nb_Ventes }},\n      \"Mode_Vente_Principal\": {{ $json.Mode_Vente_Principal }},\n      \"Is_Entreprise\": {{ $json.Is_Entreprise }},\n      \"Taux_Remise\": {{ $json.Taux_Remise }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -752,
+        208
+      ],
+      "id": "e6d99573-0758-4b7c-b458-ec9844c656ab",
+      "name": "Clustering API",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const predictions = $input.first().json.predictions;\n\nreturn predictions.map(p => ({\n  json: {\n    client_id:   p.client_id,\n    prediction:  p.prediction,\n    probabilite: p.probabilite\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        -384
+      ],
+      "id": "e4d949d9-4a1c-4c3e-aeed-dfe9ec8d47ce",
+      "name": "Format Classification"
+    },
+    {
+      "parameters": {
+        "jsCode": "const predictions = $input.first().json.predictions;\n\nreturn predictions.map(p => ({\n  json: {\n    date:      p.date,\n    ca_predit: p.ca_predit\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        32
+      ],
+      "id": "19e8c5da-86cf-45d0-bdad-6ee6b1c06252",
+      "name": "Format Timeseries"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().flatMap(item => \n  item.json.predictions.map(p => ({\n    json: {\n      Client_FK:     p.Client_FK,\n      Cluster_ID:    p.Cluster_ID,\n      Segment_Label: p.Segment_Label\n    }\n  }))\n);;;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        224
+      ],
+      "id": "a5cb1dc2-1a0c-4db6-9c7a-c75f8de0b9f9",
+      "name": "Format Clustering"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "MERGE ML_Predictions_Classification AS target\nUSING (\n    SELECT DISTINCT\n        CAST({{ $json.client_id }} AS INT)        AS Client_ID,\n        CAST({{ $json.prediction }} AS INT)       AS Prediction,\n        CAST({{ $json.probabilite }} AS FLOAT)    AS Probabilite,\n        CAST(GETDATE() AS DATE)                   AS executed_at\n) AS source (Client_ID, Prediction, Probabilite, executed_at)\nON target.Client_ID = source.Client_ID\nWHEN MATCHED THEN\n    UPDATE SET\n        Prediction   = source.Prediction,\n        Probabilite  = source.Probabilite,\n        executed_at = source.executed_at\nWHEN NOT MATCHED THEN\n    INSERT (Client_ID, Prediction, Probabilite, executed_at)\n    VALUES (source.Client_ID, source.Prediction, source.Probabilite, source.executed_at);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -256,
+        -336
+      ],
+      "id": "ad47405f-4a62-475c-a41d-dd4f3651cfed",
+      "name": "Upsert Classification",
+      "credentials": {
+        "microsoftSql": {
+          "id": "H9wCZ1gRzlejubW0",
+          "name": "Microsoft SQL account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "MERGE dbo.ML_Predictions_Timeseries AS target\nUSING (\n    SELECT DISTINCT\n        CAST('{{ $json.date }}'        AS DATE)   AS date,\n        CAST({{ $json.ca_predit }}     AS FLOAT)  AS ca_predit,\n        CAST(GETDATE() AS DATE)                   AS executed_at\n) AS source (date, ca_predit, executed_at)\nON target.date = source.date\nWHEN MATCHED THEN\n    UPDATE SET\n        ca_predit    = source.ca_predit,\n        executed_at = source.executed_at\nWHEN NOT MATCHED THEN\n    INSERT (date, ca_predit, executed_at)\n    VALUES (source.date, source.ca_predit, source.executed_at);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -256,
+        16
+      ],
+      "id": "7494e445-7bee-4b00-8964-cfe5d3da3690",
+      "name": "Upsert Timeseries",
+      "credentials": {
+        "microsoftSql": {
+          "id": "H9wCZ1gRzlejubW0",
+          "name": "Microsoft SQL account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "MERGE dbo.Dim_Client_Segments AS target\nUSING (VALUES (\n    {{ $json.Client_FK }},\n    {{ $json.Cluster_ID }},\n    '{{ $json.Segment_Label }}',\n    CAST(GETDATE() AS DATE)\n)) AS source (Client_FK, Cluster_ID, Segment_Label, Date_Scoring)\nON target.Client_FK = source.Client_FK\nWHEN MATCHED THEN\n    UPDATE SET\n        Cluster_ID    = source.Cluster_ID,\n        Segment_Label = source.Segment_Label,\n        Date_Scoring  = source.Date_Scoring\nWHEN NOT MATCHED THEN\n    INSERT (Client_FK, Cluster_ID, Segment_Label, Date_Scoring)\n    VALUES (source.Client_FK, source.Cluster_ID, source.Segment_Label, source.Date_Scoring);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -256,
+        224
+      ],
+      "id": "ec98a742-900c-4fec-92ae-b488eb858786",
+      "name": "Upsert Clustering",
+      "credentials": {
+        "microsoftSql": {
+          "id": "H9wCZ1gRzlejubW0",
+          "name": "Microsoft SQL account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const predictions = $input.first().json.predictions;\nreturn predictions.map(p => ({\n  json: {\n    commande_id:    p.commande_id,\n    montant_predit: p.montant_predit\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        -144
+      ],
+      "id": "a2fc8b33-1c9b-4f76-afa7-308c17c6a6ac",
+      "name": "Format Regression"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "MERGE ML_Predictions_Regression AS target\nUSING (\n    SELECT DISTINCT\n        CAST('{{ $json.commande_id }}' AS NVARCHAR(50)) AS Commande_ID,\n        CAST({{ $json.montant_predit }} AS FLOAT)       AS Montant_Predit,\n        CAST(GETDATE() AS DATE)                         AS executed_at\n) AS source (Commande_ID, Montant_Predit, executed_at)\nON target.Commande_ID = source.Commande_ID\nWHEN MATCHED THEN\n    UPDATE SET\n        Montant_Predit = source.Montant_Predit,\n        executed_at    = source.executed_at\nWHEN NOT MATCHED THEN\n    INSERT (Commande_ID, Montant_Predit, executed_at)\n    VALUES (source.Commande_ID, source.Montant_Predit, source.executed_at);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        -112
+      ],
+      "id": "ed409676-6455-4509-b897-5bd8fc4bab0b",
+      "name": "Upsert Regression",
+      "credentials": {
+        "microsoftSql": {
+          "id": "H9wCZ1gRzlejubW0",
+          "name": "Microsoft SQL account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = items.flatMap(i => i.json.details ?? [i.json]);\n\nconst failedJobs = jobs.filter(j =>\n  j.status !== \"success\" ||\n  (j.stderr && j.stderr.trim() !== \"\")\n);\n\nreturn [\n  {\n    json: {\n      hasError: failedJobs.length > 0,\n      failedJobs,\n      total: jobs.length,\n      failedCount: failedJobs.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1904,
+        -144
+      ],
+      "id": "38cef507-550a-4478-9e6a-e5cb5a98f3f5",
+      "name": "Normalize_ETL_Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e42f29ab-3fd7-4333-a884-8250fe5e3bbd",
+              "leftValue": "={{ $json.hasError }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1664,
+        -144
+      ],
+      "id": "583b64a5-a371-4912-b30f-26fda9d2e1db",
+      "name": "ETL_Failure_Check"
+    },
+    {
+      "parameters": {
+        "fromEmail": "mehdikallala11@gmail.com",
+        "toEmail": "MhamedMehdi.Kallala@esprit.tn",
+        "subject": "❌ ETL Failure detected",
+        "html": "=<h3>ETL Failure Report</h3>\n\n<p><b>Jobs en erreur :</b></p>\n\n{{ $json.failedJobs.map(j => `\n  <hr>\n  <p><b>Job:</b> ${j.job}</p>\n  <p><b>Status:</b> ${j.status}</p>\n  <p><b>Error:</b> ${j.stderr || 'N/A'}</p>\n`).join('') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -1504,
+        -336
+      ],
+      "id": "67d07c1c-5f69-46d4-8ada-7f4f89dceec0",
+      "name": "Send_ETL_Alert_Email",
+      "webhookId": "04df06c8-f6d3-4f6a-b94b-4ca6530bfe92",
+      "credentials": {
+        "smtp": {
+          "id": "9Rohlqahtntzv62H",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -1328,
+        -144
+      ],
+      "id": "0d1c7ff7-07ce-461d-8106-edeb8e5d494e",
+      "name": "Wait_For_DWH_Sync",
+      "webhookId": "a37514cb-a0e9-4749-958b-0e1b06c41e58"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/run/etl",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2144,
+        -160
+      ],
+      "id": "c5d72a30-80d7-4f09-ae36-d6b06bbe647d",
+      "name": "Execute ETL"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    model: \"classification\",\n    status: \"success\",\n    stderr: \"\",\n    rowsAffected: $json.rowsAffected || 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -304
+      ],
+      "id": "8e5bce83-3fa4-4db3-a608-b513ad1548a8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    model: \"regression\",\n    status: \"success\",\n    stderr: \"\",\n    rowsAffected: $json.rowsAffected || 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -112
+      ],
+      "id": "118519b7-17d5-4e79-a394-21ac1bb32ce1",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    model: \"timeseries\",\n    status: \"success\",\n    stderr: \"\",\n    rowsAffected: $json.rowsAffected || 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        16
+      ],
+      "id": "1f9b755e-064b-4ae9-869d-893ecd57f6bb",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    model: \"clustering\",\n    status: \"success\",\n    stderr: \"\",\n    rowsAffected: $json.rowsAffected || 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        224
+      ],
+      "id": "8bd11579-a833-4c9d-bb19-7669e89ef830",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\n\n// détecter erreurs MSSQL (robuste)\nconst failed = items.filter(i =>\n  (i.rowsAffected === 0 || i.rowsAffected === null || i.rowsAffected === undefined)\n);\n\n// build summary\nreturn [\n  {\n    json: {\n      hasError: failed.length > 0,\n      status: failed.length > 0 ? \"FAILED\" : \"SUCCESS\",\n      totalQueries: items.length,\n      failedCount: failed.length,\n      successfulCount: items.length - failed.length,\n      failedJobs: failed,\n      details: items\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -16
+      ],
+      "id": "559460f9-1aad-4b33-b07d-d123df779309",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1f328dd2-4fa5-4180-a2e2-53648740a29a",
+              "leftValue": "={{ $json.hasError }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        528,
+        -16
+      ],
+      "id": "e4b92540-0c25-406d-b10d-655ada34529e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fromEmail": "mehdikallala11@gmail.com",
+        "toEmail": "MhamedMehdi.Kallala@esprit.tn",
+        "subject": "ML Pipeline FAILED",
+        "html": "=<h2>ML Pipeline Error Report</h2>\n\n<p><b>Status:</b> FAILED</p>\n<p><b>Failed jobs:</b></p>\n\n<ul>\n{{ $json.failedJobs.map(j => `<li>${j.message || 'SQL error'} - rowsAffected: ${j.rowsAffected}</li>`).join('') }}\n</ul>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        688,
+        -176
+      ],
+      "id": "5cad98fe-e68f-4551-9cd7-2ec444652e1c",
+      "name": "Send_ETL_Alert_Email1",
+      "webhookId": "04df06c8-f6d3-4f6a-b94b-4ca6530bfe92",
+      "credentials": {
+        "smtp": {
+          "id": "9Rohlqahtntzv62H",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "mehdikallala11@gmail.com",
+        "toEmail": "MhamedMehdi.Kallala@esprit.tn",
+        "subject": "ML Pipeline SUCCESS",
+        "html": "=<h2>ML Pipeline Completed</h2>\n\n<p>Status: SUCCESS</p>\n<p>Total queries: {{$json.totalQueries}}</p>\n<p>Successful: {{$json.successfulCount}}</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        688,
+        48
+      ],
+      "id": "9126c853-e373-4b08-a949-473fc47f2c8e",
+      "name": "Send_ETL_Alert_Email2",
+      "webhookId": "04df06c8-f6d3-4f6a-b94b-4ca6530bfe92",
+      "credentials": {
+        "smtp": {
+          "id": "9Rohlqahtntzv62H",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        288,
+        -224
+      ],
+      "id": "8708efd7-1ed0-40a8-940f-6ea851ac3fcc",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Trigger at 6am": {
+      "main": [
+        [
+          {
+            "node": "Execute ETL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classification query": {
+      "main": [
+        [
+          {
+            "node": "Classificatin API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regression Query": {
+      "main": [
+        [
+          {
+            "node": "Regresion API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Time Serie Query": {
+      "main": [
+        [
+          {
+            "node": "Time Series API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clustering Query": {
+      "main": [
+        [
+          {
+            "node": "Clustering API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificatin API": {
+      "main": [
+        [
+          {
+            "node": "Format Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Time Series API": {
+      "main": [
+        [
+          {
+            "node": "Format Timeseries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clustering API": {
+      "main": [
+        [
+          {
+            "node": "Format Clustering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Classification": {
+      "main": [
+        [
+          {
+            "node": "Upsert Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Timeseries": {
+      "main": [
+        [
+          {
+            "node": "Upsert Timeseries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Clustering": {
+      "main": [
+        [
+          {
+            "node": "Upsert Clustering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regresion API": {
+      "main": [
+        [
+          {
+            "node": "Format Regression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Regression": {
+      "main": [
+        [
+          {
+            "node": "Upsert Regression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize_ETL_Status": {
+      "main": [
+        [
+          {
+            "node": "ETL_Failure_Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ETL_Failure_Check": {
+      "main": [
+        [
+          {
+            "node": "Wait_For_DWH_Sync",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send_ETL_Alert_Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait_For_DWH_Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send_ETL_Alert_Email": {
+      "main": [
+        [
+          {
+            "node": "Wait_For_DWH_Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait_For_DWH_Sync": {
+      "main": [
+        [
+          {
+            "node": "Regression Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Time Serie Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Clustering Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Classification query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute ETL": {
+      "main": [
+        [
+          {
+            "node": "Normalize_ETL_Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Classification": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Regression": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Timeseries": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Clustering": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send_ETL_Alert_Email1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send_ETL_Alert_Email2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "091b1f7b-9cb5-4946-8a57-e224959a19e2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4d810d63433c09973791f96a3e80e544f0f089fcad69e8a59ad281875c79745e"
+  },
+  "id": "x4zfMV7GiEjU1Pp6",
+  "tags": []
+}
