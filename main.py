@@ -2,6 +2,7 @@
 # main.py
 # FastAPI — ML Prediction API
 # Endpoints :
+#   POST /run/etl                 → Lance les jobs Talend (via conteneur Linux)
 #   POST /predict/classification  → loyalty prediction (XGBoost)
 #   POST /predict/regression      → order amount prediction (Random Forest)
 #   POST /predict/timeseries      → monthly revenue forecast (XGBoost)
@@ -10,20 +11,25 @@
 # Run : uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 # =============================================================================
 import sys
+import time
+import logging
 from pathlib import Path
+from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent))
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Any
-import logging
-import time
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 # ── Import prediction functions from each module ──────────────────────────────
 from classification import predict as predict_classification
 from regression     import predict as predict_regression
 from timeseries     import predict as predict_timeseries
 from clustering     import predict as predict_clustering
+
+# ── Config ────────────────────────────────────────────────────────────────────
+TALEND_URL = "http://localhost:5001/run/etl"   # conteneur talend exposé sur le port 5001
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -39,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="E-Commerce ML API",
-    description="Endpoints de prédiction : fidélité client, montant commande, CA mensuel, segmentation client",
+    description="ETL Talend + Prédictions ML : fidélité client, montant commande, CA mensuel, segmentation client",
     version="1.0.0"
 )
 
@@ -50,10 +56,10 @@ class PredictRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    model:       str
-    n_records:   int
-    duration_ms: float
-    predictions: list[dict[str, Any]]
+    model:        str
+    n_records:    int
+    duration_ms:  float
+    predictions:  list[dict[str, Any]]
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
@@ -62,7 +68,7 @@ def health():
     return {"status": "ok"}
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# ── Helper ML ─────────────────────────────────────────────────────────────────
 def run_prediction(model_name: str, predict_fn, payload: list[dict]) -> PredictResponse:
     logger.info(f"[{model_name}] Requête reçue — {len(payload)} enregistrements")
     start = time.time()
@@ -84,7 +90,30 @@ def run_prediction(model_name: str, predict_fn, payload: list[dict]) -> PredictR
     )
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── ETL Endpoint ──────────────────────────────────────────────────────────────
+@app.post("/run/etl")
+def run_etl():
+    """
+    Lance tous les jobs Talend dans l'ordre (dimensions → faits).
+    Délègue au conteneur Linux talend_runner via HTTP.
+    """
+    logger.info("[ETL] Lancement des jobs Talend")
+    start = time.time()
+    try:
+        response = httpx.post(TALEND_URL, timeout=600)
+        result   = response.json()
+        duration = round((time.time() - start) * 1000, 2)
+        logger.info(f"[ETL] Terminé en {duration} ms — {result.get('failed', '?')} échecs")
+        return result
+    except httpx.ConnectError:
+        logger.error("[ETL] Impossible de joindre le conteneur talend")
+        raise HTTPException(status_code=503, detail="Conteneur Talend inaccessible — vérifier que n8n-project-talend-1 tourne")
+    except Exception as e:
+        logger.error(f"[ETL] Erreur : {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── ML Endpoints ──────────────────────────────────────────────────────────────
 @app.post("/predict/classification", response_model=PredictResponse)
 def classification_endpoint(request: PredictRequest):
     """
