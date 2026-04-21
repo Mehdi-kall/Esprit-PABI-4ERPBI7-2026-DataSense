@@ -92,6 +92,9 @@ if (CA > threshold) {
 - `Email` — notifications
 
 ---
+## Workflow Architecture
+
+![n8n Workflow](./workflow.png)
 
 ## Monitoring & Robustness
 
